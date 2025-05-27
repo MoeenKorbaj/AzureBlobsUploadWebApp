@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>File Management - Upload, View, Delete</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+      direction: ltr;
+    }
+
+    header {
+      background-color: #0078d7;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    #auth-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    #auth-buttons button {
+      padding: 0.5rem 1rem;
+      background-color: #0078d7;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #auth-buttons button:hover {
+      background-color: #005a9e;
+    }
+
+    #username {
+      text-align: center;
+      color: #333;
+      font-weight: bold;
+      margin-bottom: 1rem;
+    }
+
+    main {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    #uploadSection {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+
+    #imagesTable {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    #imagesTable th, #imagesTable td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: center;
+    }
+
+    img {
+      max-width: 100px;
+      border-radius: 5px;
+    }
+
+    button.delete {
+      background-color: #d9534f;
+      color: white;
+      border: none;
+      padding: 0.3rem 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button.delete:hover {
+      background-color: #c9302c;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Azure Blob File Management</h1>
+  </header>
+
+  <div id="auth-buttons">
+    <a href="/.auth/login/aad"><button>Sign In</button></a>
+    <a href="/.auth/logout"><button>Sign Out</button></a>
+  </div>
+
+  <div id="username">Checking user...</div>
+
+  <main>
+    <section id="uploadSection">
+      <input type="file" id="fileInput" />
+      <button id="uploadBtn">Upload File</button>
+    </section>
+
+    <h2>Uploaded Files</h2>
+    <table id="imagesTable">
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Name</th>
+          <th id="deleteHeader">Delete</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script>
+    let isAdmin = false;
+
+    async function checkUserAndInit() {
+      try {
+        const res = await fetch("/.auth/me");
+        if (!res.ok) throw new Error("Not logged in");
+
+        const data = await res.json();
+        const user = data.clientPrincipal;
+
+        if (!user) {
+          document.getElementById("username").textContent = "Please sign in.";
+          return;
+        }
+
+        document.getElementById("username").textContent = "Welcome, " + user.userDetails;
+
+        if (user.userRoles && user.userRoles.includes("admin")) {
+          isAdmin = true;
+        } else {
+          document.getElementById("uploadSection").style.display = "none";
+          document.getElementById("deleteHeader").style.display = "none";
+        }
+
+        listImages();
+      } catch (e) {
+        document.getElementById("username").textContent = "Not signed in.";
+        console.warn(e);
+      }
+    }
+
+    const fileInput = document.getElementById("fileInput");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const tbody = document.querySelector("#imagesTable tbody");
+
+    uploadBtn.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        alert("Please select a file first");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Content = reader.result.split(",")[1];
+        const payload = {
+          fileName: file.name,
+          fileType: file.type,
+          fileContent: base64Content
+        };
+
+        try {
+          const response = await fetch("/api/UploadBlob", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (response.ok) {
+            alert("✅ File uploaded successfully");
+            fileInput.value = "";
+            listImages();
+          } else {
+            alert("❌ Upload failed");
+            console.error(await response.text());
+          }
+        } catch (error) {
+          alert("❌ Upload error");
+          console.error(error);
+        }
+      };
+
+      reader.readAsDataURL(file);
+    });
+
+    async function listImages() {
+      try {
+        const res = await fetch("/api/ListBlobs");
+        if (!res.ok) throw new Error("Failed to load files");
+
+        const files = await res.json();
+        tbody.innerHTML = "";
+
+        for (let name of files) {
+          const url = `/api/DownloadBlob?name=${encodeURIComponent(name)}`;
+
+          const tr = document.createElement("tr");
+
+          const tdImg = document.createElement("td");
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = name;
+          tdImg.appendChild(img);
+
+          const tdName = document.createElement("td");
+          tdName.textContent = name;
+
+          tr.appendChild(tdImg);
+          tr.appendChild(tdName);
+
+          if (isAdmin) {
+            const tdDelete = document.createElement("td");
+            const btnDelete = document.createElement("button");
+            btnDelete.textContent = "Delete";
+            btnDelete.className = "delete";
+            btnDelete.onclick = () => deleteImage(name, tr);
+            tdDelete.appendChild(btnDelete);
+            tr.appendChild(tdDelete);
+          }
+
+          tbody.appendChild(tr);
+        }
+      } catch (error) {
+        alert("Error loading files: " + error.message);
+        console.error(error);
+      }
+    }
+
+    async function deleteImage(name, row) {
+      if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+
+      try {
+        const res = await fetch(`/api/DeleteBlob?name=${encodeURIComponent(name)}`, {
+          method: 'DELETE'
+        });
+
+        if (res.ok) {
+          alert("✅ File deleted");
+          row.remove();
+        } else {
+          alert("❌ Delete failed");
+          console.error(await res.text());
+        }
+      } catch (error) {
+        alert("❌ Server error");
+        console.error(error);
+      }
+    }
+
+    checkUserAndInit();
+  </script>
+</body>
+</html>

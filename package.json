@@ -1,0 +1,7 @@
+{
+  "name": "static-web-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'No build step required for static site'"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "auth": {
+    "identityProviders": {
+      "azureActiveDirectory": {
+        "registration": {
+          "clientId": "yourClientId",
+          "tenantId": "yourTenantId"
+        }
+      }
+    }
+  },
+  "routes": [
+    {
+      "route": "/",
+      "allowedRoles": ["authenticated"]
+    },
+    {
+      "route": "/login",
+      "rewrite": "/.auth/login/aad"
+    },
+    {
+      "route": "/logout",
+      "rewrite": "/.auth/logout"
+    },
+    {
+      "route": "/admin/*",
+      "allowedRoles": ["authenticated"]
+    },
+    {
+      "route": "/api/*",
+      "allowedRoles": ["authenticated"]
+    }
+  ]
+}

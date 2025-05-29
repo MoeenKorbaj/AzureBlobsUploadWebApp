@@ -17,7 +17,7 @@ module.exports = async function (context, req) {
 
     if (!user.userRoles || !user.userRoles.includes("admin")) {
       context.res = {
-        status: 403,
+        status: 403, 
         body: "ليس لديك صلاحية الحذف. مطلوب صلاحية مسؤول (admin)."
       };
       return;
